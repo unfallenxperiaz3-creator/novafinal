@@ -5,6 +5,9 @@ on:
   push:
     branches: [ "main" ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,7 +26,21 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk NOVA.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: NOVA-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: NOVA.apk
+
+      # Publica el APK como descarga directa:
+      # https://github.com/<usuario>/<repo>/releases/latest/download/NOVA.apk
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: NOVA build ${{ github.run_number }}
+          body: "Descarga NOVA.apk e instálala en tu Android."
+          files: NOVA.apk
+          make_latest: "true"
