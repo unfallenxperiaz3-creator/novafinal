@@ -113,6 +113,24 @@ class Storage(context: Context) {
         write("memories.json", arr.toString())
     }
 
+    // ---------- Diario ----------
+    fun loadDiary(): List<DiaryEntry> = readArray("diary.json").mapObjects { o ->
+        DiaryEntry(
+            id = o.optString("id"),
+            time = o.optLong("time", System.currentTimeMillis()),
+            mood = o.optString("mood"),
+            text = o.optString("text")
+        )
+    }.filter { it.text.isNotBlank() && it.id.isNotBlank() }
+
+    fun saveDiary(list: List<DiaryEntry>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(JSONObject().put("id", it.id).put("time", it.time).put("mood", it.mood).put("text", it.text))
+        }
+        write("diary.json", arr.toString())
+    }
+
     // ---------- Perfil ----------
     fun loadProfile(): Profile {
         val raw = read("profile.json") ?: return Profile()

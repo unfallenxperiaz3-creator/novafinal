@@ -18,6 +18,18 @@ data class Memory(
     val manual: Boolean = false
 )
 
+/** Una entrada del diario: lo que hiciste o una reflexión de ese día. */
+data class DiaryEntry(
+    val id: String = UUID.randomUUID().toString().take(8),
+    val time: Long = System.currentTimeMillis(),
+    val mood: String = "",          // emoji + palabra, p. ej. "🙂 Bien" (opcional)
+    val text: String
+)
+
+object Moods {
+    val all = listOf("😄 Genial", "🙂 Bien", "😐 Normal", "😔 Bajo", "😣 Mal")
+}
+
 data class Profile(
     val text: String = "",
     val updatedAt: Long = 0L

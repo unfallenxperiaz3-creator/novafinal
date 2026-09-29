@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.unfallen.nova.ai.MemoryUpdate
 import com.unfallen.nova.ai.NovaBrain
 import com.unfallen.nova.data.ChatMessage
+import com.unfallen.nova.data.DiaryEntry
 import com.unfallen.nova.data.Memory
 import com.unfallen.nova.data.NovaStatus
 import com.unfallen.nova.data.Profile
@@ -41,6 +42,8 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     var memories by mutableStateOf(listOf<Memory>())
         private set
     var profile by mutableStateOf(Profile())
+        private set
+    var diary by mutableStateOf(listOf<DiaryEntry>())
         private set
 
     var status by mutableStateOf(NovaStatus.IDLE)
@@ -90,7 +93,7 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     private var lastInputWasVoice = false
     private var chatJob: Job? = null
     private var learnJob: Job? = null
-    private var learnAgain = false
+    private val learnQueue = ArrayDeque<List<ChatMessage>>()
     private var noticeJob: Job? = null
 
     private val speaker = Speaker(
@@ -128,10 +131,12 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
             val m = storage.loadMessages()
             val mem = storage.loadMemories()
             val p = storage.loadProfile()
+            val d = storage.loadDiary()
             launch(Dispatchers.Main) {
                 messages = m
                 memories = mem
                 profile = p
+                diary = d
             }
         }
     }
@@ -164,14 +169,15 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
                     history = messages,
                     memories = memories,
                     profile = profile,
-                    voiceMode = viaVoice
+                    voiceMode = viaVoice,
+                    diary = diary
                 )
                 val msg = ChatMessage(role = "assistant", text = reply)
                 messages = messages + msg
                 persistMessages()
                 status = NovaStatus.IDLE
                 if (voiceEnabled || voiceScreenActive) speak(msg) else maybeContinueHandsFree()
-                if (learningEnabled && text.length >= 8) learn()
+                if (learningEnabled && text.length >= 8) learn(messages.takeLast(8))
             } catch (e: Exception) {
                 status = NovaStatus.IDLE
                 showError(e.message ?: "Algo ha fallado.")
@@ -259,23 +265,53 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
 
     // ============================================================ MEMORIA
 
-    private fun learn() {
-        if (learnJob?.isActive == true) {
-            learnAgain = true
-            return
-        }
+    /** Analiza un trozo de conversación o una entrada del diario, uno detrás de otro. */
+    private fun learn(source: List<ChatMessage>) {
+        learnQueue.addLast(source)
+        if (learnJob?.isActive == true) return
         learnJob = viewModelScope.launch {
             isLearning = true
             try {
-                do {
-                    learnAgain = false
-                    val update = brain.learn(apiKey, model, messages, memories, profile)
+                while (learnQueue.isNotEmpty()) {
+                    val src = learnQueue.removeFirst()
+                    val update = brain.learn(apiKey, model, src, memories, profile)
                     if (update != null) applyUpdate(update)
-                } while (learnAgain)
+                }
             } finally {
                 isLearning = false
             }
         }
+    }
+
+    // ============================================================ DIARIO
+
+    fun addDiaryEntry(text: String, mood: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        val entry = DiaryEntry(text = t, mood = mood)
+        diary = diary + entry
+        persistDiary()
+        if (apiKey.isBlank()) {
+            notice("📔 Guardado. Añade tu API key en Ajustes para que NOVA aprenda de tu diario.")
+            return
+        }
+        notice("📔 Guardado. NOVA está leyendo tu día…")
+        val day = java.text.SimpleDateFormat("EEEE d 'de' MMMM", java.util.Locale.forLanguageTag("es-ES"))
+            .format(java.util.Date(entry.time))
+        val mood2 = if (mood.isNotBlank()) " Estado de ánimo: $mood." else ""
+        learn(
+            listOf(
+                ChatMessage(
+                    role = "user",
+                    text = "(Entrada de mi diario del $day.$mood2) $t"
+                )
+            )
+        )
+    }
+
+    fun deleteDiaryEntry(id: String) {
+        diary = diary.filterNot { it.id == id }
+        persistDiary()
     }
 
     private fun applyUpdate(u: MemoryUpdate) {
@@ -463,6 +499,11 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     private fun persistMemories() {
         val snap = memories
         diskScope.launch { storage.saveMemories(snap) }
+    }
+
+    private fun persistDiary() {
+        val snap = diary
+        diskScope.launch { storage.saveDiary(snap) }
     }
 
     private fun persistProfile() {

@@ -124,7 +124,6 @@ fun SettingsScreen(vm: NovaViewModel) {
         // ---------- Voz ----------
         Section("Voz") {
             ToggleRow("Respuestas habladas", "NOVA lee en voz alta lo que contesta", vm.voiceEnabled) { vm.updateVoiceEnabled(it) }
-            ToggleRow("Conversación continua", "En la pestaña Voz, vuelve a escucharte al terminar de hablar", vm.handsFree) { vm.updateHandsFree(it) }
             Spacer(Modifier.height(6.dp))
             Text("Velocidad: ${fmt(vm.speechRate)}x", color = Nova.Text, fontSize = 14.sp)
             Slider(

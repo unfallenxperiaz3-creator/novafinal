@@ -2,6 +2,7 @@ package com.unfallen.nova.ai
 
 import com.unfallen.nova.data.Categories
 import com.unfallen.nova.data.ChatMessage
+import com.unfallen.nova.data.DiaryEntry
 import com.unfallen.nova.data.Memory
 import com.unfallen.nova.data.Profile
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +52,8 @@ class NovaBrain {
         history: List<ChatMessage>,
         memories: List<Memory>,
         profile: Profile,
-        voiceMode: Boolean
+        voiceMode: Boolean,
+        diary: List<DiaryEntry> = emptyList()
     ): String = withContext(Dispatchers.IO) {
         val input = JSONArray()
         history.takeLast(24).forEach { m ->
@@ -59,7 +61,7 @@ class NovaBrain {
         }
         val body = JSONObject()
             .put("model", model)
-            .put("instructions", buildInstructions(userName, memories, profile, voiceMode))
+            .put("instructions", buildInstructions(userName, memories, profile, voiceMode, diary))
             .put("input", input)
             .put("max_output_tokens", 3000)
             .put("store", false)
@@ -71,7 +73,8 @@ class NovaBrain {
         userName: String,
         memories: List<Memory>,
         profile: Profile,
-        voiceMode: Boolean
+        voiceMode: Boolean,
+        diary: List<DiaryEntry>
     ): String {
         val now = SimpleDateFormat("EEEE d 'de' MMMM 'de' yyyy, HH:mm", es).format(Date())
         val name = userName.ifBlank { "(todavía no me ha dicho su nombre)" }
@@ -110,6 +113,9 @@ $profileText
 
 RECUERDOS (fecha en que lo aprendiste):
 $memText
+
+DIARIO RECIENTE (lo que ha escrito sobre sus días; úsalo con tacto, sin recitarlo):
+${diaryText(diary)}
 """.trim()
     }
 
@@ -288,6 +294,14 @@ Responde ÚNICAMENTE con JSON válido, sin texto extra, con este formato:
         }
         return sb.toString().trim()
     }
+
+    private fun diaryText(diary: List<DiaryEntry>): String =
+        if (diary.isEmpty()) "(Todavía no ha escrito en su diario.)"
+        else diary.sortedByDescending { it.time }.take(7).joinToString("\n") { e ->
+            val day = SimpleDateFormat("EEEE d/M", es).format(Date(e.time))
+            val mood = if (e.mood.isNotBlank()) " [ánimo: ${e.mood}]" else ""
+            "- $day$mood: ${e.text.take(600)}"
+        }
 
     private fun shortDate(t: Long): String = SimpleDateFormat("d/M/yy", es).format(Date(t))
 }

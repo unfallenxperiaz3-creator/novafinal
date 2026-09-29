@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -46,12 +46,12 @@ import com.unfallen.nova.ui.Nova
 import com.unfallen.nova.ui.NovaTheme
 import com.unfallen.nova.ui.PinLockScreen
 import com.unfallen.nova.ui.SettingsScreen
-import com.unfallen.nova.ui.VoiceScreen
+import com.unfallen.nova.ui.DiaryScreen
 
 enum class Tab(val label: String, val icon: ImageVector) {
     CHAT("Chat", Icons.Filled.ChatBubble),
     MEMORY("Memoria", Icons.Filled.Psychology),
-    VOICE("Voz", Icons.Filled.GraphicEq),
+    DIARY("Diario", Icons.Filled.Book),
     SETTINGS("Ajustes", Icons.Filled.Settings)
 }
 
@@ -129,7 +129,7 @@ fun NovaRoot(vm: NovaViewModel) {
             when (tab) {
                 Tab.CHAT -> ChatScreen(vm, onMic = onMic, onOpenSettings = { tab = Tab.SETTINGS })
                 Tab.MEMORY -> if (vm.memoryUnlocked) MemoryScreen(vm) else PinLockScreen(vm)
-                Tab.VOICE -> VoiceScreen(vm, onMic = onMic)
+                Tab.DIARY -> DiaryScreen(vm)
                 Tab.SETTINGS -> SettingsScreen(vm)
             }
         }
