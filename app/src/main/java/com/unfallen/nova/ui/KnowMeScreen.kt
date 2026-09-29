@@ -65,9 +65,7 @@ private val qaDate = SimpleDateFormat("d MMM · HH:mm", Locale.forLanguageTag("e
 fun KnowMeScreen(vm: NovaViewModel) {
     LaunchedEffect(Unit) { vm.ensureQuestion() }
     var answer by rememberSaveable { mutableStateOf("") }
-    var toDelete by remember { mutableStateOf<QaEntry?>(null) }
     val q = vm.currentQuestion
-    val history = vm.qa.sortedByDescending { it.time }
 
     LazyColumn(
         Modifier
@@ -81,7 +79,7 @@ fun KnowMeScreen(vm: NovaViewModel) {
                 Text("Conóceme", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Text(
                     if (vm.qa.isEmpty()) "NOVA te pregunta, tú respondes cuando quieras. Las preguntas no se acaban nunca."
-                    else "Has respondido ${vm.qa.size} pregunta${if (vm.qa.size == 1) "" else "s"}. Cada respuesta va a tu memoria.",
+                    else "Has respondido ${vm.qa.size} pregunta${if (vm.qa.size == 1) "" else "s"}. NOVA memoriza lo importante y la respuesta desaparece.",
                     color = Nova.Muted, fontSize = 14.sp, lineHeight = 19.sp
                 )
             }
@@ -158,7 +156,7 @@ fun KnowMeScreen(vm: NovaViewModel) {
                         enabled = q != null
                     ) { Text("Otra pregunta", color = Nova.Muted) }
                     Spacer(Modifier.weight(1f))
-                    val canSend = q != null && answer.isNotBlank()
+                    val canSend = q != null && answer.isNotBlank() && vm.hasApiKey
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(14.dp))
@@ -172,7 +170,7 @@ fun KnowMeScreen(vm: NovaViewModel) {
                 }
                 if (!vm.hasApiKey) {
                     Text(
-                        "Sin API key uso preguntas de reserva y no puedo guardar tus respuestas en la memoria. Añádela en Ajustes.",
+                        "Para memorizar tus respuestas necesito tu API key. Añádela en Ajustes.",
                         color = Nova.Muted, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 8.dp)
                     )
                 }
@@ -185,48 +183,5 @@ fun KnowMeScreen(vm: NovaViewModel) {
             }
         }
 
-        // ---------- Respuestas anteriores ----------
-        if (history.isNotEmpty()) {
-            item {
-                Text(
-                    "Tus respuestas",
-                    color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 22.dp, bottom = 6.dp)
-                )
-            }
-        }
-        items(history, key = { it.id }) { e ->
-            Column(
-                Modifier
-                    .padding(vertical = 4.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Nova.Surface)
-                    .border(1.dp, Nova.Stroke, RoundedCornerShape(16.dp))
-                    .padding(start = 14.dp, top = 10.dp, bottom = 12.dp, end = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${e.category} · ${qaDate.format(Date(e.time))}", color = Nova.Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Box(
-                        Modifier.size(34.dp).clip(CircleShape).clickable { toDelete = e },
-                        contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Filled.Delete, "Borrar respuesta", tint = Nova.Muted, modifier = Modifier.size(17.dp)) }
-                }
-                Text(e.question, color = Nova.Violet, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(end = 10.dp))
-                Text(e.answer, color = Nova.Text, fontSize = 15.sp, lineHeight = 21.sp, modifier = Modifier.padding(end = 10.dp))
-            }
-        }
-    }
-
-    toDelete?.let { e ->
-        AlertDialog(
-            onDismissRequest = { toDelete = null },
-            title = { Text("¿Borrar esta respuesta?") },
-            text = { Text("Se borra de la lista. Lo que NOVA ya aprendió de ella sigue en Memoria.") },
-            confirmButton = { TextButton(onClick = { vm.deleteQa(e.id); toDelete = null }) { Text("Borrar", color = Nova.Danger) } },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancelar") } },
-            containerColor = Nova.Surface
-        )
     }
 }

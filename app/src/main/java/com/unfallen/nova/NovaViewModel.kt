@@ -149,7 +149,7 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
             val q = storage.loadQa()
             val sk = storage.loadSkipped()
             launch(Dispatchers.Main) {
-                qa = q
+                qa = q.map { it.copy(answer = "") } // por si quedara alguna respuesta antigua
                 skipped = sk
                 currentQuestion = storage.loadQuestion("qa_current")
                 nextQuestion = storage.loadQuestion("qa_next")
@@ -311,22 +311,24 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
         else if (nextQuestion == null) prefetchQuestion()
     }
 
+    /**
+     * Guarda en la memoria lo importante de la respuesta y la descarta:
+     * de Conóceme solo queda la pregunta (para no repetirla), nunca la respuesta.
+     */
     fun answerQuestion(answer: String) {
         val q = currentQuestion ?: return
         val a = answer.trim()
-        if (a.isEmpty()) return
-        val entry = QaEntry(question = q.text, category = q.category, answer = a)
-        qa = qa + entry
+        if (a.isEmpty() || apiKey.isBlank()) return
+        qa = qa + QaEntry(question = q.text, category = q.category, answer = "")
         persistQa()
         advanceQuestion()
-        if (apiKey.isNotBlank()) {
-            learn(
-                listOf(
-                    ChatMessage(role = "assistant", text = q.text),
-                    ChatMessage(role = "user", text = a)
-                )
+        notice("🧠 Memorizando tu respuesta…")
+        learn(
+            listOf(
+                ChatMessage(role = "assistant", text = q.text),
+                ChatMessage(role = "user", text = a)
             )
-        }
+        )
     }
 
     fun skipQuestion() {

@@ -203,7 +203,7 @@ Responde ÚNICAMENTE con JSON válido, sin texto extra, con este formato:
         avoid: List<String>
     ): Question? = withContext(Dispatchers.IO) {
         val known = memories.takeLast(60).joinToString("\n") { "- ${it.category}: ${it.text}" }.ifBlank { "(casi nada todavía)" }
-        val qa = recentQa.takeLast(12).joinToString("\n") { "P: ${it.question}\nR: ${it.answer.take(300)}" }.ifBlank { "(ninguna todavía)" }
+        val qa = recentQa.takeLast(12).joinToString("\n") { "- ${it.question}" }.ifBlank { "(ninguna todavía)" }
         val lastCats = recentQa.takeLast(4).joinToString(", ") { it.category }.ifBlank { "ninguna" }
         val deepen = recentQa.isNotEmpty() && Math.random() < 0.3
         val prompt = """
@@ -214,7 +214,7 @@ Reglas:
 - En español de España, tuteando, natural y cercana. Máximo 25 palabras.
 - Varía muchísimo los temas: infancia, recuerdos, gustos (música, cine, comida, coches, viajes), valores, sueños, miedos, relaciones, familia, amistad, trabajo y proyectos, hábitos, salud y deporte, dinero y metas, dilemas "¿qué harías si…?", filosofía, humor, emociones, futuro, curiosidades raras.
 - No uses la misma categoría que las últimas preguntas ($lastCats).
-- ${if (deepen) "Esta vez PROFUNDIZA en una de sus respuestas anteriores con una pregunta de seguimiento concreta." else "Esta vez abre un tema nuevo del que aún sepas poco."}
+- ${if (deepen) "Esta vez PROFUNDIZA en algo concreto que ya sabes de él/ella (sus recuerdos o su retrato) con una pregunta de seguimiento." else "Esta vez abre un tema nuevo del que aún sepas poco."}
 - No repitas ni reformules ninguna de estas preguntas ya hechas:
 ${avoid.takeLast(80).joinToString("\n") { "  · $it" }.ifBlank { "  (ninguna)" }}
 - Alterna preguntas ligeras y divertidas con otras más profundas. Nada de preguntas incómodas sobre sexo, dinero exacto o datos privados como direcciones o contraseñas.
@@ -225,7 +225,7 @@ $known
 RETRATO:
 ${profile.text.ifBlank { "(aún no hay)" }}
 
-ÚLTIMAS PREGUNTAS Y RESPUESTAS:
+ÚLTIMAS PREGUNTAS QUE YA LE HICISTE:
 $qa
 
 Responde SOLO con JSON: {"category":"una o dos palabras","question":"..."}
