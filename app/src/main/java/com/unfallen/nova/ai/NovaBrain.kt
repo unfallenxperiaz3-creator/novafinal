@@ -279,6 +279,45 @@ $prev
         return out.values.take(6)
     }
 
+    // ------------------------------------------------------------------ LIBRO
+
+    /** Prólogo que NOVA escribe para "El libro de tu vida". */
+    suspend fun bookPrologue(
+        apiKey: String,
+        model: String,
+        userName: String,
+        profile: Profile,
+        memories: List<Memory>,
+        diary: List<DiaryEntry>
+    ): String? = withContext(Dispatchers.IO) {
+        val known = memories.takeLast(80).joinToString("\n") { "- ${it.category}: ${it.text}" }.ifBlank { "(pocos datos)" }
+        val instructions = """
+Eres NOVA, la compañera extraterrestre de ${userName.ifBlank { "esta persona" }}. Vas a escribir el PRÓLOGO de "El libro de su vida", que recoge su diario, sus sueños y lo que has aprendido de él/ella.
+Escríbelo en español de España, en tercera persona hablando de él/ella, con tono cálido, literario y honesto, entre 180 y 260 palabras, sin listas ni títulos ni emojis.
+Cuenta quién es, qué le mueve, qué ha vivido en este tiempo y qué has aprendido tú al conocerle. No inventes nada que no esté en los datos.
+
+RETRATO:
+${profile.text.ifBlank { "(aún no hay)" }}
+
+LO QUE SABES:
+$known
+
+DIARIO RECIENTE:
+${diaryText(diary)}
+""".trim()
+        val body = JSONObject()
+            .put("model", model)
+            .put("instructions", instructions)
+            .put("input", "Escribe el prólogo.")
+            .put("max_output_tokens", 2000)
+            .put("store", false)
+        try {
+            parseText(post(apiKey, body, allowReasoningFallback = true)).ifBlank { null }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     // ------------------------------------------------------------------ CÁPSULAS
 
     /** Lo que NOVA le dice a la persona al abrir una cápsula del tiempo. */

@@ -15,6 +15,7 @@ import com.unfallen.nova.data.DiaryEntry
 import com.unfallen.nova.data.QaEntry
 import com.unfallen.nova.data.TimeCapsule
 import com.unfallen.nova.data.Dream
+import com.unfallen.nova.book.LifeBook
 import com.unfallen.nova.capsule.CapsuleScheduler
 import com.unfallen.nova.data.Question
 import com.unfallen.nova.ai.QuestionBank
@@ -50,6 +51,12 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     var profile by mutableStateOf(Profile())
         private set
     var diary by mutableStateOf(listOf<DiaryEntry>())
+        private set
+
+    // Libro de tu vida
+    var bookFile by mutableStateOf<java.io.File?>(null)
+        private set
+    var bookBusy by mutableStateOf<String?>(null)   // texto de progreso mientras se crea
         private set
 
     // Sueños
@@ -327,6 +334,39 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
                 isLearning = false
             }
         }
+    }
+
+    // ============================================================ LIBRO
+
+    fun createBook(includeDreams: Boolean, withPrologue: Boolean) {
+        if (bookBusy != null) return
+        bookFile = null
+        viewModelScope.launch {
+            try {
+                var prologue: String? = null
+                if (withPrologue && apiKey.isNotBlank()) {
+                    bookBusy = "NOVA está escribiendo el prólogo…"
+                    prologue = brain.bookPrologue(apiKey, model, userName, profile, memories, diary)
+                }
+                bookBusy = "Maquetando tu libro…"
+                val content = LifeBook.Content(
+                    userName = userName, profile = profile, memories = memories, diary = diary,
+                    dreams = dreams, capsules = capsules, prologue = prologue, includeDreams = includeDreams
+                )
+                val app = getApplication<Application>()
+                bookFile = kotlinx.coroutines.withContext(Dispatchers.IO) { LifeBook.write(app, content) }
+            } catch (e: Exception) {
+                showError("No he podido crear el libro: ${e.message ?: "error"}")
+            } finally {
+                bookBusy = null
+            }
+        }
+    }
+
+    /** Copia el libro a Descargas. Devuelve true si se ha guardado. */
+    fun saveBookToDownloads(): Boolean {
+        val f = bookFile ?: return false
+        return LifeBook.saveToDownloads(getApplication<Application>(), f)
     }
 
     // ============================================================ SUEÑOS

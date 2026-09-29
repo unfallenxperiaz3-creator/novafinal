@@ -158,6 +158,8 @@ fun DiaryScreen(vm: NovaViewModel, onOpenCapsules: () -> Unit, onOpenDreams: () 
                     }
                     Text("›", color = Nova.Muted, fontSize = 24.sp)
                 }
+                Spacer(Modifier.size(8.dp))
+                BookCard(vm)
             }
         }
 
