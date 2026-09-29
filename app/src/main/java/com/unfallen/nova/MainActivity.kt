@@ -1,0 +1,146 @@
+package com.unfallen.nova
+
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognizerIntent
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.unfallen.nova.data.NovaStatus
+import com.unfallen.nova.ui.ChatScreen
+import com.unfallen.nova.ui.MemoryScreen
+import com.unfallen.nova.ui.Nova
+import com.unfallen.nova.ui.NovaTheme
+import com.unfallen.nova.ui.SettingsScreen
+import com.unfallen.nova.ui.VoiceScreen
+
+enum class Tab(val label: String, val icon: ImageVector) {
+    CHAT("Chat", Icons.Filled.ChatBubble),
+    MEMORY("Memoria", Icons.Filled.Psychology),
+    VOICE("Voz", Icons.Filled.GraphicEq),
+    SETTINGS("Ajustes", Icons.Filled.Settings)
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        setContent {
+            NovaTheme { NovaRoot() }
+        }
+    }
+}
+
+@Composable
+fun NovaRoot(vm: NovaViewModel = viewModel()) {
+    val context = LocalContext.current
+    var tab by rememberSaveable { mutableStateOf(Tab.CHAT) }
+
+    // Plan B: si el móvil no deja usar el reconocimiento "dentro" de la app, abrimos el de Google
+    val systemVoice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val text = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!text.isNullOrBlank()) vm.send(text, viaVoice = true)
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.startListening()
+        else vm.reportError("Sin permiso de micrófono no puedo escucharte. Actívalo en Ajustes del móvil → Apps → NOVA → Permisos.")
+    }
+
+    val onMic: () -> Unit = {
+        when {
+            vm.status == NovaStatus.LISTENING -> vm.finishListening()
+            !vm.speechAvailable -> {
+                vm.stopSpeaking()
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
+                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla con NOVA")
+                }
+                try {
+                    systemVoice.launch(intent)
+                } catch (e: ActivityNotFoundException) {
+                    vm.reportError("Este móvil no tiene reconocimiento de voz. Instala la app de Google.")
+                }
+            }
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED -> vm.startListening()
+            else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
+    Scaffold(
+        containerColor = Nova.Bg,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            if (!keyboardOpen) {
+                NovaBottomBar(tab) { tab = it }
+            }
+        }
+    ) { pad ->
+        Box(Modifier.fillMaxSize().padding(pad)) {
+            when (tab) {
+                Tab.CHAT -> ChatScreen(vm, onMic = onMic, onOpenSettings = { tab = Tab.SETTINGS })
+                Tab.MEMORY -> MemoryScreen(vm)
+                Tab.VOICE -> VoiceScreen(vm, onMic = onMic)
+                Tab.SETTINGS -> SettingsScreen(vm)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovaBottomBar(current: Tab, onSelect: (Tab) -> Unit) {
+    NavigationBar(containerColor = Color(0xFF0A0D16), tonalElevation = androidx.compose.ui.unit.Dp(0f)) {
+        Tab.entries.forEach { t ->
+            NavigationBarItem(
+                selected = current == t,
+                onClick = { onSelect(t) },
+                icon = { Icon(t.icon, contentDescription = t.label) },
+                label = { Text(t.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color.White,
+                    selectedTextColor = Color.White,
+                    indicatorColor = Nova.PurpleDeep,
+                    unselectedIconColor = Nova.Muted,
+                    unselectedTextColor = Nova.Muted
+                )
+            )
+        }
+    }
+}
