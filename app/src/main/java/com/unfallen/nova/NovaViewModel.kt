@@ -442,9 +442,11 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
         memoryUnlocked = false
     }
 
-    /** "He olvidado el PIN": se borra la memoria entera y el PIN, para que nadie pueda leerla. */
+    /** "He olvidado el PIN": se borran memoria, retrato, diario y PIN, para que nadie pueda leerlos. */
     fun forgetPinAndMemories() {
         clearMemories()
+        diary = emptyList()
+        persistDiary()
         storage.pinHash = ""
         storage.pinSalt = ""
         storage.pinFails = 0

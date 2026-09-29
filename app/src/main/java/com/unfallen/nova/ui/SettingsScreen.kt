@@ -233,8 +233,8 @@ private fun PinSettings(vm: NovaViewModel) {
     val digits = { v: String -> v.filter { it.isDigit() }.take(NovaViewModel.PIN_LENGTH) }
 
     Text(
-        if (vm.hasPin) "La pestaña Memoria está protegida con un PIN de 4 números."
-        else "La pestaña Memoria aún no tiene PIN. Se te pedirá crearlo al entrar en ella.",
+        if (vm.hasPin) "Memoria y Diario están protegidos con un PIN de 4 números."
+        else "Memoria y Diario aún no tienen PIN. Se te pedirá crearlo al entrar en cualquiera de los dos.",
         color = Nova.Muted, fontSize = 13.sp
     )
     if (done) {

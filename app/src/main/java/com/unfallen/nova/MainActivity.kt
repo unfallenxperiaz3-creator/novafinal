@@ -48,10 +48,10 @@ import com.unfallen.nova.ui.PinLockScreen
 import com.unfallen.nova.ui.SettingsScreen
 import com.unfallen.nova.ui.DiaryScreen
 
-enum class Tab(val label: String, val icon: ImageVector) {
+enum class Tab(val label: String, val icon: ImageVector, val needsPin: Boolean = false) {
     CHAT("Chat", Icons.Filled.ChatBubble),
-    MEMORY("Memoria", Icons.Filled.Psychology),
-    DIARY("Diario", Icons.Filled.Book),
+    MEMORY("Memoria", Icons.Filled.Psychology, needsPin = true),
+    DIARY("Diario", Icons.Filled.Book, needsPin = true),
     SETTINGS("Ajustes", Icons.Filled.Settings)
 }
 
@@ -119,7 +119,8 @@ fun NovaRoot(vm: NovaViewModel) {
         bottomBar = {
             if (!keyboardOpen) {
                 NovaBottomBar(tab) { new ->
-                    if (tab == Tab.MEMORY && new != Tab.MEMORY) vm.lockMemory()
+                    // Memoria y Diario comparten PIN: se vuelve a bloquear al salir de ambos
+                    if (tab.needsPin && !new.needsPin) vm.lockMemory()
                     tab = new
                 }
             }
@@ -129,7 +130,8 @@ fun NovaRoot(vm: NovaViewModel) {
             when (tab) {
                 Tab.CHAT -> ChatScreen(vm, onMic = onMic, onOpenSettings = { tab = Tab.SETTINGS })
                 Tab.MEMORY -> if (vm.memoryUnlocked) MemoryScreen(vm) else PinLockScreen(vm)
-                Tab.DIARY -> DiaryScreen(vm)
+                Tab.DIARY -> if (vm.memoryUnlocked) DiaryScreen(vm)
+                    else PinLockScreen(vm, lockedTitle = "Diario protegido", what = "tu diario")
                 Tab.SETTINGS -> SettingsScreen(vm)
             }
         }

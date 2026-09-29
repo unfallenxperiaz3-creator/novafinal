@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
  * - Si ya hay PIN: lo pide. 5 fallos = 30 s de espera.
  */
 @Composable
-fun PinLockScreen(vm: NovaViewModel) {
+fun PinLockScreen(vm: NovaViewModel, lockedTitle: String = "Memoria protegida", what: String = "lo que NOVA sabe de ti") {
     val creating = !vm.hasPin
     var entered by remember { mutableStateOf("") }
     var firstPin by remember { mutableStateOf<String?>(null) }   // al crear: primer intento
@@ -110,13 +110,13 @@ fun PinLockScreen(vm: NovaViewModel) {
 
     val locked = lockLeft > 0
     val title = when {
-        creating && firstPin == null -> "Crea un PIN para tu Memoria"
+        creating && firstPin == null -> "Crea tu PIN"
         creating -> "Confirma tu PIN"
-        else -> "Memoria protegida"
+        else -> lockedTitle
     }
     val subtitle = message ?: if (creating)
-        "Elige 4 números. Te lo pediré cada vez que entres aquí."
-    else "Introduce tu PIN para ver lo que NOVA sabe de ti."
+        "Elige 4 números. Protegerá tu Memoria y tu Diario."
+    else "Introduce tu PIN para ver $what."
 
     Column(
         Modifier
@@ -204,12 +204,12 @@ fun PinLockScreen(vm: NovaViewModel) {
             text = {
                 Text(
                     "Para proteger lo que le has contado a NOVA, la única forma de quitar el PIN es borrar " +
-                        "toda la memoria y tu retrato. La conversación del chat no se borra. No se puede deshacer."
+                        "toda la memoria, tu retrato y el diario. La conversación del chat no se borra. No se puede deshacer."
                 )
             },
             confirmButton = {
                 TextButton(onClick = { vm.forgetPinAndMemories(); askForget = false }) {
-                    Text("Borrar memoria y PIN", color = Nova.Danger)
+                    Text("Borrar todo y quitar PIN", color = Nova.Danger)
                 }
             },
             dismissButton = { TextButton(onClick = { askForget = false }) { Text("Cancelar") } },
