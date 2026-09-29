@@ -12,6 +12,9 @@ import com.unfallen.nova.ai.MemoryUpdate
 import com.unfallen.nova.ai.NovaBrain
 import com.unfallen.nova.data.ChatMessage
 import com.unfallen.nova.data.DiaryEntry
+import com.unfallen.nova.data.QaEntry
+import com.unfallen.nova.data.Question
+import com.unfallen.nova.ai.QuestionBank
 import com.unfallen.nova.data.Memory
 import com.unfallen.nova.data.NovaStatus
 import com.unfallen.nova.data.Profile
@@ -45,6 +48,17 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var diary by mutableStateOf(listOf<DiaryEntry>())
         private set
+
+    // Conóceme
+    var qa by mutableStateOf(listOf<QaEntry>())
+        private set
+    var currentQuestion by mutableStateOf<Question?>(null)
+        private set
+    var loadingQuestion by mutableStateOf(false)
+        private set
+    private var nextQuestion: Question? = null
+    private var skipped = listOf<String>()
+    private var prefetchJob: Job? = null
 
     var status by mutableStateOf(NovaStatus.IDLE)
         private set
@@ -132,7 +146,13 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
             val mem = storage.loadMemories()
             val p = storage.loadProfile()
             val d = storage.loadDiary()
+            val q = storage.loadQa()
+            val sk = storage.loadSkipped()
             launch(Dispatchers.Main) {
+                qa = q
+                skipped = sk
+                currentQuestion = storage.loadQuestion("qa_current")
+                nextQuestion = storage.loadQuestion("qa_next")
                 messages = m
                 memories = mem
                 profile = p
@@ -281,6 +301,99 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
                 isLearning = false
             }
         }
+    }
+
+    // ============================================================ CONÓCEME
+
+    /** Se llama al abrir la pestaña: si no hay pregunta delante, prepara una. */
+    fun ensureQuestion() {
+        if (currentQuestion == null) advanceQuestion()
+        else if (nextQuestion == null) prefetchQuestion()
+    }
+
+    fun answerQuestion(answer: String) {
+        val q = currentQuestion ?: return
+        val a = answer.trim()
+        if (a.isEmpty()) return
+        val entry = QaEntry(question = q.text, category = q.category, answer = a)
+        qa = qa + entry
+        persistQa()
+        advanceQuestion()
+        if (apiKey.isNotBlank()) {
+            learn(
+                listOf(
+                    ChatMessage(role = "assistant", text = q.text),
+                    ChatMessage(role = "user", text = a)
+                )
+            )
+        }
+    }
+
+    fun skipQuestion() {
+        val q = currentQuestion ?: return
+        skipped = (skipped + q.text).takeLast(300)
+        val snap = skipped
+        diskScope.launch { storage.saveSkipped(snap) }
+        advanceQuestion()
+    }
+
+    fun deleteQa(id: String) {
+        qa = qa.filterNot { it.id == id }
+        persistQa()
+    }
+
+    private fun askedSoFar(): List<String> =
+        qa.map { it.question } + skipped + listOfNotNull(currentQuestion?.text, nextQuestion?.text)
+
+    /** Pasa a la siguiente pregunta: la ya preparada si la hay, si no la genera ahora. */
+    private fun advanceQuestion() {
+        val ready = nextQuestion
+        if (ready != null) {
+            setCurrent(ready)
+            nextQuestion = null
+            storage.saveQuestion("qa_next", null)
+            prefetchQuestion()
+            return
+        }
+        setCurrent(null)
+        loadingQuestion = true
+        viewModelScope.launch {
+            val q = generateQuestion()
+            loadingQuestion = false
+            setCurrent(q)
+            prefetchQuestion()
+        }
+    }
+
+    /** Prepara en segundo plano la siguiente, para que aparezca al instante al responder. */
+    private fun prefetchQuestion() {
+        if (prefetchJob?.isActive == true || nextQuestion != null) return
+        prefetchJob = viewModelScope.launch {
+            val q = generateQuestion()
+            if (currentQuestion?.text != q.text) {
+                nextQuestion = q
+                storage.saveQuestion("qa_next", q)
+            }
+        }
+    }
+
+    private suspend fun generateQuestion(): Question {
+        val avoid = askedSoFar()
+        if (apiKey.isNotBlank()) {
+            val q = brain.nextQuestion(apiKey, model, userName, profile, memories, qa, avoid)
+            if (q != null && avoid.none { it.equals(q.text, ignoreCase = true) }) return q
+        }
+        return QuestionBank.pick(avoid.toSet())
+    }
+
+    private fun setCurrent(q: Question?) {
+        currentQuestion = q
+        storage.saveQuestion("qa_current", q)
+    }
+
+    private fun persistQa() {
+        val snap = qa
+        diskScope.launch { storage.saveQa(snap) }
     }
 
     // ============================================================ DIARIO
@@ -461,7 +574,11 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
                 PinResult.LOCKED -> return "Demasiados intentos. Espera ${pinLockRemaining() / 1000 + 1} s."
             }
         }
-        if (target == WipeTarget.MEMORY || target == WipeTarget.ALL) clearMemories()
+        if (target == WipeTarget.MEMORY || target == WipeTarget.ALL) {
+            clearMemories()
+            qa = emptyList()
+            persistQa()
+        }
         if (target == WipeTarget.DIARY || target == WipeTarget.ALL) {
             diary = emptyList()
             persistDiary()

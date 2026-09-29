@@ -131,6 +131,53 @@ class Storage(context: Context) {
         write("diary.json", arr.toString())
     }
 
+    // ---------- Conóceme ----------
+    fun loadQa(): List<QaEntry> = readArray("qa.json").mapObjects { o ->
+        QaEntry(
+            id = o.optString("id"),
+            question = o.optString("q"),
+            category = o.optString("c"),
+            answer = o.optString("a"),
+            time = o.optLong("time", System.currentTimeMillis())
+        )
+    }.filter { it.id.isNotBlank() && it.question.isNotBlank() }
+
+    fun saveQa(list: List<QaEntry>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(JSONObject().put("id", it.id).put("q", it.question).put("c", it.category).put("a", it.answer).put("time", it.time))
+        }
+        write("qa.json", arr.toString())
+    }
+
+    /** Preguntas saltadas (para no repetirlas). */
+    fun loadSkipped(): List<String> {
+        val a = readArray("qa_skipped.json")
+        return (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
+    }
+
+    fun saveSkipped(list: List<String>) {
+        val arr = JSONArray()
+        list.takeLast(300).forEach { arr.put(it) }
+        write("qa_skipped.json", arr.toString())
+    }
+
+    /** La pregunta que tienes delante (y la siguiente ya preparada), para que no cambie al cerrar la app. */
+    fun loadQuestion(key: String): Question? {
+        val raw = prefs.getString(key, null) ?: return null
+        return try {
+            val o = JSONObject(raw)
+            Question(o.getString("q"), o.optString("c"))
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun saveQuestion(key: String, q: Question?) {
+        if (q == null) prefs.edit().remove(key).apply()
+        else prefs.edit().putString(key, JSONObject().put("q", q.text).put("c", q.category).toString()).apply()
+    }
+
     // ---------- Perfil ----------
     fun loadProfile(): Profile {
         val raw = read("profile.json") ?: return Profile()

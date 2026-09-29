@@ -26,6 +26,18 @@ data class DiaryEntry(
     val text: String
 )
 
+/** Una pregunta de "Conóceme" ya respondida. */
+data class QaEntry(
+    val id: String = UUID.randomUUID().toString().take(8),
+    val question: String,
+    val category: String,
+    val answer: String,
+    val time: Long = System.currentTimeMillis()
+)
+
+/** Pregunta pendiente de responder. */
+data class Question(val text: String, val category: String)
+
 object Moods {
     val all = listOf("😄 Genial", "🙂 Bien", "😐 Normal", "😔 Bajo", "😣 Mal")
 }

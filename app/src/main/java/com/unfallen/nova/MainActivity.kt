@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.unit.sp
 import com.unfallen.nova.data.NovaStatus
 import com.unfallen.nova.ui.ChatScreen
 import com.unfallen.nova.ui.MemoryScreen
@@ -47,11 +49,13 @@ import com.unfallen.nova.ui.NovaTheme
 import com.unfallen.nova.ui.PinLockScreen
 import com.unfallen.nova.ui.SettingsScreen
 import com.unfallen.nova.ui.DiaryScreen
+import com.unfallen.nova.ui.KnowMeScreen
 
 enum class Tab(val label: String, val icon: ImageVector, val needsPin: Boolean = false) {
     CHAT("Chat", Icons.Filled.ChatBubble),
-    MEMORY("Memoria", Icons.Filled.Psychology, needsPin = true),
+    KNOWME("Conóceme", Icons.Filled.QuestionAnswer),
     DIARY("Diario", Icons.Filled.Book, needsPin = true),
+    MEMORY("Memoria", Icons.Filled.Psychology, needsPin = true),
     SETTINGS("Ajustes", Icons.Filled.Settings)
 }
 
@@ -130,6 +134,7 @@ fun NovaRoot(vm: NovaViewModel) {
             when (tab) {
                 Tab.CHAT -> ChatScreen(vm, onMic = onMic, onOpenSettings = { tab = Tab.SETTINGS })
                 Tab.MEMORY -> if (vm.memoryUnlocked) MemoryScreen(vm) else PinLockScreen(vm)
+                Tab.KNOWME -> KnowMeScreen(vm)
                 Tab.DIARY -> if (vm.memoryUnlocked) DiaryScreen(vm)
                     else PinLockScreen(vm, lockedTitle = "Diario protegido", what = "tu diario")
                 Tab.SETTINGS -> SettingsScreen(vm)
@@ -146,7 +151,7 @@ private fun NovaBottomBar(current: Tab, onSelect: (Tab) -> Unit) {
                 selected = current == t,
                 onClick = { onSelect(t) },
                 icon = { Icon(t.icon, contentDescription = t.label) },
-                label = { Text(t.label) },
+                label = { Text(t.label, fontSize = 11.sp, maxLines = 1, softWrap = false) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color.White,
                     selectedTextColor = Color.White,

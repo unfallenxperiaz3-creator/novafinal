@@ -5,6 +5,8 @@ import com.unfallen.nova.data.ChatMessage
 import com.unfallen.nova.data.DiaryEntry
 import com.unfallen.nova.data.Memory
 import com.unfallen.nova.data.Profile
+import com.unfallen.nova.data.QaEntry
+import com.unfallen.nova.data.Question
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -183,6 +185,72 @@ Responde ÚNICAMENTE con JSON válido, sin texto extra, con este formato:
             return@withContext null
         }
         parseMemoryUpdate(parseText(raw))
+    }
+
+    // ------------------------------------------------------------------ CONÓCEME
+
+    /**
+     * Inventa la siguiente pregunta para conocer mejor a la persona.
+     * Nunca repite, va variando de tema y a veces profundiza en una respuesta anterior.
+     */
+    suspend fun nextQuestion(
+        apiKey: String,
+        model: String,
+        userName: String,
+        profile: Profile,
+        memories: List<Memory>,
+        recentQa: List<QaEntry>,
+        avoid: List<String>
+    ): Question? = withContext(Dispatchers.IO) {
+        val known = memories.takeLast(60).joinToString("\n") { "- ${it.category}: ${it.text}" }.ifBlank { "(casi nada todavía)" }
+        val qa = recentQa.takeLast(12).joinToString("\n") { "P: ${it.question}\nR: ${it.answer.take(300)}" }.ifBlank { "(ninguna todavía)" }
+        val lastCats = recentQa.takeLast(4).joinToString(", ") { it.category }.ifBlank { "ninguna" }
+        val deepen = recentQa.isNotEmpty() && Math.random() < 0.3
+        val prompt = """
+Eres NOVA, una IA extraterrestre curiosa y cálida que quiere conocer a fondo a ${userName.ifBlank { "su usuario" }}, como un buen psicólogo que además es su amigo.
+Escribe UNA sola pregunta nueva para hacerle ahora.
+
+Reglas:
+- En español de España, tuteando, natural y cercana. Máximo 25 palabras.
+- Varía muchísimo los temas: infancia, recuerdos, gustos (música, cine, comida, coches, viajes), valores, sueños, miedos, relaciones, familia, amistad, trabajo y proyectos, hábitos, salud y deporte, dinero y metas, dilemas "¿qué harías si…?", filosofía, humor, emociones, futuro, curiosidades raras.
+- No uses la misma categoría que las últimas preguntas ($lastCats).
+- ${if (deepen) "Esta vez PROFUNDIZA en una de sus respuestas anteriores con una pregunta de seguimiento concreta." else "Esta vez abre un tema nuevo del que aún sepas poco."}
+- No repitas ni reformules ninguna de estas preguntas ya hechas:
+${avoid.takeLast(80).joinToString("\n") { "  · $it" }.ifBlank { "  (ninguna)" }}
+- Alterna preguntas ligeras y divertidas con otras más profundas. Nada de preguntas incómodas sobre sexo, dinero exacto o datos privados como direcciones o contraseñas.
+
+LO QUE YA SABES DE ÉL/ELLA:
+$known
+
+RETRATO:
+${profile.text.ifBlank { "(aún no hay)" }}
+
+ÚLTIMAS PREGUNTAS Y RESPUESTAS:
+$qa
+
+Responde SOLO con JSON: {"category":"una o dos palabras","question":"..."}
+""".trim()
+        val body = JSONObject()
+            .put("model", model)
+            .put("input", prompt)
+            .put("max_output_tokens", 800)
+            .put("store", false)
+        val raw = try {
+            post(apiKey, body, allowReasoningFallback = true)
+        } catch (e: Exception) {
+            return@withContext null
+        }
+        val text = parseText(raw)
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start < 0 || end <= start) return@withContext null
+        try {
+            val o = JSONObject(text.substring(start, end + 1))
+            val q = o.optString("question").trim()
+            if (q.length < 5) null else Question(q, o.optString("category").trim().ifBlank { "Conóceme" })
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun parseMemoryUpdate(text: String): MemoryUpdate? {
