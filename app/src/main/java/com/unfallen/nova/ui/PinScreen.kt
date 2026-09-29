@@ -60,7 +60,6 @@ fun PinLockScreen(vm: NovaViewModel, lockedTitle: String = "Memoria protegida", 
     var isError by remember { mutableStateOf(false) }
     var lockLeft by remember { mutableLongStateOf(vm.pinLockRemaining()) }
     var lockTick by remember { mutableIntStateOf(0) }
-    var askForget by remember { mutableStateOf(false) }
     val shake = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
@@ -185,36 +184,12 @@ fun PinLockScreen(vm: NovaViewModel, lockedTitle: String = "Memoria protegida", 
         }
 
         Spacer(Modifier.height(18.dp))
-        if (!creating) {
-            TextButton(onClick = { askForget = true }) {
-                Text("¿Has olvidado el PIN?", color = Nova.Muted, fontSize = 13.sp)
-            }
-        } else if (firstPin != null) {
+        if (creating && firstPin != null) {
             TextButton(onClick = { firstPin = null; entered = ""; message = null; isError = false }) {
                 Text("Empezar de nuevo", color = Nova.Muted, fontSize = 13.sp)
             }
         }
         Spacer(Modifier.height(8.dp))
-    }
-
-    if (askForget) {
-        AlertDialog(
-            onDismissRequest = { askForget = false },
-            title = { Text("¿Has olvidado el PIN?") },
-            text = {
-                Text(
-                    "Para proteger lo que le has contado a NOVA, la única forma de quitar el PIN es borrar " +
-                        "toda la memoria, tu retrato y el diario. La conversación del chat no se borra. No se puede deshacer."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { vm.forgetPinAndMemories(); askForget = false }) {
-                    Text("Borrar todo y quitar PIN", color = Nova.Danger)
-                }
-            },
-            dismissButton = { TextButton(onClick = { askForget = false }) { Text("Cancelar") } },
-            containerColor = Nova.Surface
-        )
     }
 }
 

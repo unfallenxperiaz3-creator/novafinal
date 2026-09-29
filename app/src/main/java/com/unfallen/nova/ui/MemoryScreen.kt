@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.AlertDialog
@@ -66,7 +65,6 @@ fun MemoryScreen(vm: NovaViewModel) {
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
     var draft by remember { mutableStateOf<MemoryDraft?>(null) }
     var editingProfile by remember { mutableStateOf<String?>(null) }
-    var confirmClear by remember { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<Memory?>(null) }
 
     val visible = memories
@@ -97,9 +95,6 @@ fun MemoryScreen(vm: NovaViewModel) {
                             "Lo que NOVA sabe de ti · ${memories.size} recuerdos",
                             color = Nova.Muted, fontSize = 14.sp
                         )
-                    }
-                    if (memories.isNotEmpty() || profile.text.isNotBlank()) {
-                        RoundIcon(Icons.Filled.DeleteForever, "Borrar toda la memoria", onClick = { confirmClear = true }, tint = Nova.Danger)
                     }
                 }
                 if (vm.isLearning) {
@@ -256,18 +251,6 @@ fun MemoryScreen(vm: NovaViewModel) {
         )
     }
 
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            title = { Text("¿Borrar toda la memoria?") },
-            text = { Text("NOVA olvidará todos los recuerdos y tu retrato. No se puede deshacer.") },
-            confirmButton = {
-                TextButton(onClick = { vm.clearMemories(); confirmClear = false }) { Text("Borrar todo", color = Nova.Danger) }
-            },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancelar") } },
-            containerColor = Nova.Surface
-        )
-    }
 }
 
 @Composable

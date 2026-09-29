@@ -397,10 +397,16 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     fun pinLockRemaining(): Long = (storage.pinLockUntil - System.currentTimeMillis()).coerceAtLeast(0L)
 
     fun tryUnlock(pin: String): PinResult {
+        val r = verifyPin(pin)
+        if (r == PinResult.OK) memoryUnlocked = true
+        return r
+    }
+
+    /** Comprueba el PIN contando fallos (5 fallos = 30 s de espera). Nunca borra nada. */
+    private fun verifyPin(pin: String): PinResult {
         if (pinLockRemaining() > 0) return PinResult.LOCKED
         if (checkPin(pin)) {
             storage.pinFails = 0
-            memoryUnlocked = true
             return PinResult.OK
         }
         val fails = storage.pinFails + 1
@@ -424,11 +430,10 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     /** Devuelve null si ha ido bien, o el motivo del error. */
     fun changePin(current: String, new: String, repeat: String): String? {
         if (hasPin) {
-            if (pinLockRemaining() > 0) return "Demasiados intentos. Espera ${pinLockRemaining() / 1000 + 1} s."
-            if (!checkPin(current)) {
-                val r = tryUnlock(current) // cuenta el fallo
-                memoryUnlocked = false
-                return if (r == PinResult.LOCKED) "Demasiados intentos. Espera 30 s." else "El PIN actual no es correcto."
+            when (verifyPin(current)) {
+                PinResult.OK -> Unit
+                PinResult.WRONG -> return "El PIN actual no es correcto. Te quedan ${pinAttemptsLeft()} intentos."
+                PinResult.LOCKED -> return "Demasiados intentos. Espera ${pinLockRemaining() / 1000 + 1} s."
             }
         }
         if (!isValidPin(new)) return "El PIN nuevo debe tener 4 números."
@@ -442,17 +447,26 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
         memoryUnlocked = false
     }
 
-    /** "He olvidado el PIN": se borran memoria, retrato, diario y PIN, para que nadie pueda leerlos. */
-    fun forgetPinAndMemories() {
-        clearMemories()
-        diary = emptyList()
-        persistDiary()
-        storage.pinHash = ""
-        storage.pinSalt = ""
-        storage.pinFails = 0
-        storage.pinLockUntil = 0L
-        hasPin = false
-        memoryUnlocked = false
+    enum class WipeTarget { MEMORY, DIARY, ALL }
+
+    /**
+     * Borrado desde Ajustes: exige el PIN (si hay uno creado).
+     * Devuelve null si se ha borrado, o el motivo del error.
+     */
+    fun wipeWithPin(pin: String, target: WipeTarget): String? {
+        if (hasPin) {
+            when (verifyPin(pin)) {
+                PinResult.OK -> Unit
+                PinResult.WRONG -> return "PIN incorrecto. Te quedan ${pinAttemptsLeft()} intentos."
+                PinResult.LOCKED -> return "Demasiados intentos. Espera ${pinLockRemaining() / 1000 + 1} s."
+            }
+        }
+        if (target == WipeTarget.MEMORY || target == WipeTarget.ALL) clearMemories()
+        if (target == WipeTarget.DIARY || target == WipeTarget.ALL) {
+            diary = emptyList()
+            persistDiary()
+        }
+        return null
     }
 
     fun isValidPin(pin: String) = pin.length == PIN_LENGTH && pin.all { it.isDigit() }

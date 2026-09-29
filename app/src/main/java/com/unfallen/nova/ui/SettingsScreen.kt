@@ -160,6 +160,11 @@ fun SettingsScreen(vm: NovaViewModel) {
             PinSettings(vm)
         }
 
+        // ---------- Borrar datos (con PIN) ----------
+        Section("Borrar memoria y diario") {
+            WipeSettings(vm)
+        }
+
         // ---------- Conversación ----------
         Section("Conversación") {
             OutlinedButton(onClick = { confirmClear = true }, modifier = Modifier.fillMaxWidth()) {
@@ -276,4 +281,70 @@ private fun PinField(value: String, onChange: (String) -> Unit, label: String) {
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
     )
+}
+
+/** Borrar memoria / diario: pide el PIN antes de borrar. */
+@Composable
+private fun WipeSettings(vm: NovaViewModel) {
+    var target by remember { mutableStateOf<NovaViewModel.WipeTarget?>(null) }
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var done by remember { mutableStateOf<String?>(null) }
+
+    Text(
+        "Aquí puedes hacer que NOVA olvide lo que sabe de ti. " +
+            if (vm.hasPin) "Te pedirá el PIN." else "Aún no tienes PIN, así que solo te pedirá confirmación.",
+        color = Nova.Muted, fontSize = 13.sp
+    )
+    done?.let { Text(it, color = Nova.Success, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp)) }
+
+    val current = target
+    if (current == null) {
+        val options = listOf(
+            NovaViewModel.WipeTarget.MEMORY to "Borrar memoria y retrato (${vm.memories.size} recuerdos)",
+            NovaViewModel.WipeTarget.DIARY to "Borrar diario (${vm.diary.size} entradas)",
+            NovaViewModel.WipeTarget.ALL to "Borrar todo (memoria, retrato y diario)"
+        )
+        options.forEach { (t, label) ->
+            OutlinedButton(
+                onClick = { target = t; pin = ""; error = null; done = null },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) { Text(label, color = Nova.Danger) }
+        }
+        return
+    }
+
+    val what = when (current) {
+        NovaViewModel.WipeTarget.MEMORY -> "todos los recuerdos y tu retrato"
+        NovaViewModel.WipeTarget.DIARY -> "todas las entradas del diario"
+        NovaViewModel.WipeTarget.ALL -> "todos los recuerdos, tu retrato y el diario"
+    }
+    Text(
+        "Se borrarán $what. No se puede deshacer. La conversación del chat no se toca.",
+        color = Nova.Text, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp)
+    )
+    if (vm.hasPin) {
+        PinField(pin, { v -> pin = v.filter { it.isDigit() }.take(NovaViewModel.PIN_LENGTH) }, "Tu PIN")
+    }
+    error?.let { Text(it, color = Nova.Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = { target = null; pin = ""; error = null }) { Text("Cancelar", color = Nova.Muted) }
+        Spacer(Modifier.weight(1f))
+        Button(
+            onClick = {
+                val e = vm.wipeWithPin(pin, current)
+                if (e == null) {
+                    done = "Borrado ✓"
+                    target = null
+                    pin = ""
+                    error = null
+                } else {
+                    error = e
+                    pin = ""
+                }
+            },
+            enabled = !vm.hasPin || pin.length == NovaViewModel.PIN_LENGTH,
+            colors = ButtonDefaults.buttonColors(containerColor = Nova.Danger)
+        ) { Text("Borrar") }
+    }
 }
