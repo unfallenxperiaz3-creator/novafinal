@@ -156,6 +156,11 @@ fun SettingsScreen(vm: NovaViewModel) {
             ) { vm.updateLearning(it) }
         }
 
+        // ---------- Seguridad ----------
+        Section("Seguridad") {
+            PinSettings(vm)
+        }
+
         // ---------- Conversación ----------
         Section("Conversación") {
             OutlinedButton(onClick = { confirmClear = true }, modifier = Modifier.fillMaxWidth()) {
@@ -213,4 +218,63 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
             colors = SwitchDefaults.colors(checkedTrackColor = Nova.Purple)
         )
     }
+}
+
+/** Crear o cambiar el PIN que protege la pestaña Memoria. */
+@Composable
+private fun PinSettings(vm: NovaViewModel) {
+    var editing by remember { mutableStateOf(false) }
+    var current by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var repeat by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var done by remember { mutableStateOf(false) }
+
+    fun reset() { current = ""; newPin = ""; repeat = ""; error = null }
+    val digits = { v: String -> v.filter { it.isDigit() }.take(NovaViewModel.PIN_LENGTH) }
+
+    Text(
+        if (vm.hasPin) "La pestaña Memoria está protegida con un PIN de 4 números."
+        else "La pestaña Memoria aún no tiene PIN. Se te pedirá crearlo al entrar en ella.",
+        color = Nova.Muted, fontSize = 13.sp
+    )
+    if (done) {
+        Text("PIN guardado ✓", color = Nova.Success, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+    }
+    if (!editing) {
+        OutlinedButton(
+            onClick = { editing = true; done = false; reset() },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) { Text(if (vm.hasPin) "Cambiar PIN" else "Crear PIN", color = Nova.Text) }
+        return
+    }
+
+    if (vm.hasPin) PinField(current, { current = digits(it) }, "PIN actual")
+    PinField(newPin, { newPin = digits(it) }, "PIN nuevo (4 números)")
+    PinField(repeat, { repeat = digits(it) }, "Repite el PIN nuevo")
+    error?.let { Text(it, color = Nova.Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)) }
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = { editing = false; reset() }) { Text("Cancelar", color = Nova.Muted) }
+        Spacer(Modifier.weight(1f))
+        Button(
+            onClick = {
+                val e = vm.changePin(current, newPin, repeat)
+                if (e == null) { editing = false; done = true; reset() } else error = e
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Nova.Purple)
+        ) { Text("Guardar PIN") }
+    }
+}
+
+@Composable
+private fun PinField(value: String, onChange: (String) -> Unit, label: String) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+    )
 }

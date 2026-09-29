@@ -49,6 +49,24 @@ class Storage(context: Context) {
         get() = prefs.getFloat("speech_pitch", 0.9f)
         set(v) = prefs.edit().putFloat("speech_pitch", v).apply()
 
+    // ---------- PIN de la Memoria ----------
+    // Se guarda solo el hash (SHA-256 con sal), nunca el PIN en claro.
+    var pinHash: String
+        get() = prefs.getString("pin_hash", "") ?: ""
+        set(v) = prefs.edit().putString("pin_hash", v).apply()
+
+    var pinSalt: String
+        get() = prefs.getString("pin_salt", "") ?: ""
+        set(v) = prefs.edit().putString("pin_salt", v).apply()
+
+    var pinFails: Int
+        get() = prefs.getInt("pin_fails", 0)
+        set(v) = prefs.edit().putInt("pin_fails", v).apply()
+
+    var pinLockUntil: Long
+        get() = prefs.getLong("pin_lock_until", 0L)
+        set(v) = prefs.edit().putLong("pin_lock_until", v).apply()
+
     // ---------- Mensajes ----------
     fun loadMessages(): List<ChatMessage> = readArray("messages.json").mapObjects { o ->
         ChatMessage(

@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -38,12 +39,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.unfallen.nova.data.NovaStatus
 import com.unfallen.nova.ui.ChatScreen
 import com.unfallen.nova.ui.MemoryScreen
 import com.unfallen.nova.ui.Nova
 import com.unfallen.nova.ui.NovaTheme
+import com.unfallen.nova.ui.PinLockScreen
 import com.unfallen.nova.ui.SettingsScreen
 import com.unfallen.nova.ui.VoiceScreen
 
@@ -55,17 +56,25 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 class MainActivity : ComponentActivity() {
+    private val vm: NovaViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            NovaTheme { NovaRoot() }
+            NovaTheme { NovaRoot(vm) }
         }
+    }
+
+    override fun onStop() {
+        // Al salir de la app (o apagar pantalla) la Memoria vuelve a pedir el PIN
+        vm.lockMemory()
+        super.onStop()
     }
 }
 
 @Composable
-fun NovaRoot(vm: NovaViewModel = viewModel()) {
+fun NovaRoot(vm: NovaViewModel) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(Tab.CHAT) }
 
@@ -109,14 +118,17 @@ fun NovaRoot(vm: NovaViewModel = viewModel()) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (!keyboardOpen) {
-                NovaBottomBar(tab) { tab = it }
+                NovaBottomBar(tab) { new ->
+                    if (tab == Tab.MEMORY && new != Tab.MEMORY) vm.lockMemory()
+                    tab = new
+                }
             }
         }
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             when (tab) {
                 Tab.CHAT -> ChatScreen(vm, onMic = onMic, onOpenSettings = { tab = Tab.SETTINGS })
-                Tab.MEMORY -> MemoryScreen(vm)
+                Tab.MEMORY -> if (vm.memoryUnlocked) MemoryScreen(vm) else PinLockScreen(vm)
                 Tab.VOICE -> VoiceScreen(vm, onMic = onMic)
                 Tab.SETTINGS -> SettingsScreen(vm)
             }

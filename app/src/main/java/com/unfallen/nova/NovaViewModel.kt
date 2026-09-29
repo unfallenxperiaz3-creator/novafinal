@@ -81,6 +81,12 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     var speechPitch by mutableFloatStateOf(storage.speechPitch)
         private set
 
+    // ------------------------------------------------------------ PIN de Memoria
+    var hasPin by mutableStateOf(storage.pinHash.isNotBlank())
+        private set
+    var memoryUnlocked by mutableStateOf(false)
+        private set
+
     private var lastInputWasVoice = false
     private var chatJob: Job? = null
     private var learnJob: Job? = null
@@ -347,6 +353,89 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
         persistProfile()
     }
 
+    // ============================================================ PIN
+
+    enum class PinResult { OK, WRONG, LOCKED }
+
+    /** Milisegundos que faltan para poder reintentar tras 5 fallos (0 = se puede). */
+    fun pinLockRemaining(): Long = (storage.pinLockUntil - System.currentTimeMillis()).coerceAtLeast(0L)
+
+    fun tryUnlock(pin: String): PinResult {
+        if (pinLockRemaining() > 0) return PinResult.LOCKED
+        if (checkPin(pin)) {
+            storage.pinFails = 0
+            memoryUnlocked = true
+            return PinResult.OK
+        }
+        val fails = storage.pinFails + 1
+        if (fails >= MAX_PIN_FAILS) {
+            storage.pinFails = 0
+            storage.pinLockUntil = System.currentTimeMillis() + PIN_LOCK_MS
+            return PinResult.LOCKED
+        }
+        storage.pinFails = fails
+        return PinResult.WRONG
+    }
+
+    fun pinAttemptsLeft(): Int = MAX_PIN_FAILS - storage.pinFails
+
+    /** Crea el PIN por primera vez y abre la Memoria. */
+    fun createPin(pin: String) {
+        savePin(pin)
+        memoryUnlocked = true
+    }
+
+    /** Devuelve null si ha ido bien, o el motivo del error. */
+    fun changePin(current: String, new: String, repeat: String): String? {
+        if (hasPin) {
+            if (pinLockRemaining() > 0) return "Demasiados intentos. Espera ${pinLockRemaining() / 1000 + 1} s."
+            if (!checkPin(current)) {
+                val r = tryUnlock(current) // cuenta el fallo
+                memoryUnlocked = false
+                return if (r == PinResult.LOCKED) "Demasiados intentos. Espera 30 s." else "El PIN actual no es correcto."
+            }
+        }
+        if (!isValidPin(new)) return "El PIN nuevo debe tener 4 números."
+        if (new != repeat) return "Los dos PIN nuevos no coinciden."
+        storage.pinFails = 0
+        savePin(new)
+        return null
+    }
+
+    fun lockMemory() {
+        memoryUnlocked = false
+    }
+
+    /** "He olvidado el PIN": se borra la memoria entera y el PIN, para que nadie pueda leerla. */
+    fun forgetPinAndMemories() {
+        clearMemories()
+        storage.pinHash = ""
+        storage.pinSalt = ""
+        storage.pinFails = 0
+        storage.pinLockUntil = 0L
+        hasPin = false
+        memoryUnlocked = false
+    }
+
+    fun isValidPin(pin: String) = pin.length == PIN_LENGTH && pin.all { it.isDigit() }
+
+    private fun savePin(pin: String) {
+        val salt = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }.toHex()
+        storage.pinSalt = salt
+        storage.pinHash = hashPin(pin, salt)
+        hasPin = true
+    }
+
+    private fun checkPin(pin: String): Boolean =
+        hasPin && hashPin(pin, storage.pinSalt) == storage.pinHash
+
+    private fun hashPin(pin: String, salt: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest((salt + ":" + pin).toByteArray(Charsets.UTF_8))
+            .toHex()
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
     // ============================================================ AJUSTES
 
     fun updateApiKey(v: String) { apiKey = v.trim(); storage.apiKey = v }
@@ -390,5 +479,8 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val MAX_MEMORIES = 300
+        const val PIN_LENGTH = 4
+        const val MAX_PIN_FAILS = 5
+        const val PIN_LOCK_MS = 30_000L
     }
 }
