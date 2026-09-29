@@ -13,6 +13,8 @@ import com.unfallen.nova.ai.NovaBrain
 import com.unfallen.nova.data.ChatMessage
 import com.unfallen.nova.data.DiaryEntry
 import com.unfallen.nova.data.QaEntry
+import com.unfallen.nova.data.TimeCapsule
+import com.unfallen.nova.capsule.CapsuleScheduler
 import com.unfallen.nova.data.Question
 import com.unfallen.nova.ai.QuestionBank
 import com.unfallen.nova.data.Memory
@@ -47,6 +49,17 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     var profile by mutableStateOf(Profile())
         private set
     var diary by mutableStateOf(listOf<DiaryEntry>())
+        private set
+
+    // Cápsulas del tiempo
+    var capsules by mutableStateOf(listOf<TimeCapsule>())
+        private set
+    /** Dentro de la pestaña Diario: true = se ve la pantalla de cápsulas. */
+    var showCapsules by mutableStateOf(false)
+    /** Pestaña pedida desde fuera (p. ej. al tocar la notificación de una cápsula). */
+    var openCapsulesRequest by mutableStateOf(false)
+    private val openingNotes = mutableSetOf<String>()
+    var generatingNote by mutableStateOf<String?>(null)
         private set
 
     // Conóceme
@@ -148,7 +161,9 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
             val d = storage.loadDiary()
             val q = storage.loadQa()
             val sk = storage.loadSkipped()
+            val caps = storage.loadCapsules()
             launch(Dispatchers.Main) {
+                capsules = caps
                 qa = q.map { it.copy(answer = "") } // por si quedara alguna respuesta antigua
                 skipped = sk
                 currentQuestion = storage.loadQuestion("qa_current")
@@ -301,6 +316,52 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
                 isLearning = false
             }
         }
+    }
+
+    // ============================================================ CÁPSULAS
+
+    fun addCapsule(text: String, openAt: Long) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        val c = TimeCapsule(text = t, openAt = openAt)
+        capsules = capsules + c
+        persistCapsules()
+        CapsuleScheduler.schedule(getApplication<Application>(), c.id, c.openAt)
+    }
+
+    fun deleteCapsule(id: String) {
+        CapsuleScheduler.cancel(getApplication<Application>(), id)
+        capsules = capsules.filterNot { it.id == id }
+        persistCapsules()
+    }
+
+    /** Abre una cápsula ya lista y pide a NOVA su comentario. */
+    fun openCapsule(id: String) {
+        val c = capsules.firstOrNull { it.id == id } ?: return
+        if (!c.isReady()) return
+        if (!c.opened) {
+            capsules = capsules.map { if (it.id == id) it.copy(opened = true) else it }
+            persistCapsules()
+        }
+        if (c.novaNote.isNotBlank() || apiKey.isBlank() || id in openingNotes) return
+        openingNotes.add(id)
+        generatingNote = id
+        viewModelScope.launch {
+            val note = brain.capsuleNote(apiKey, model, userName, c.text, c.createdAt, profile, memories, diary)
+            openingNotes.remove(id)
+            if (generatingNote == id) generatingNote = null
+            if (note != null) {
+                capsules = capsules.map { if (it.id == id) it.copy(novaNote = note) else it }
+                persistCapsules()
+            }
+        }
+    }
+
+    fun readyCapsules(): Int = capsules.count { it.isReady() && !it.opened }
+
+    private fun persistCapsules() {
+        val snap = capsules
+        diskScope.launch { storage.saveCapsules(snap) }
     }
 
     // ============================================================ CONÓCEME
@@ -584,6 +645,9 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
         if (target == WipeTarget.DIARY || target == WipeTarget.ALL) {
             diary = emptyList()
             persistDiary()
+            capsules.forEach { CapsuleScheduler.cancel(getApplication<Application>(), it.id) }
+            capsules = emptyList()
+            persistCapsules()
         }
         return null
     }

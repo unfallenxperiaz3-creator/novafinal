@@ -38,6 +38,18 @@ data class QaEntry(
 /** Pregunta pendiente de responder. */
 data class Question(val text: String, val category: String)
 
+/** Mensaje a tu yo del futuro: sellado hasta [openAt]. */
+data class TimeCapsule(
+    val id: String = UUID.randomUUID().toString().take(8),
+    val createdAt: Long = System.currentTimeMillis(),
+    val openAt: Long,
+    val text: String,
+    val opened: Boolean = false,
+    val novaNote: String = ""       // lo que NOVA comenta al abrirla
+) {
+    fun isReady(now: Long = System.currentTimeMillis()) = now >= openAt
+}
+
 object Moods {
     val all = listOf("😄 Genial", "🙂 Bien", "😐 Normal", "😔 Bajo", "😣 Mal")
 }

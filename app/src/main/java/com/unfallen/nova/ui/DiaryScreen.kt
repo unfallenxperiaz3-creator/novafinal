@@ -80,7 +80,7 @@ private fun dayTitle(t: Long): String {
 
 /** Diario: formulario del día + entradas anteriores. Cada entrada se envía a la memoria de NOVA. */
 @Composable
-fun DiaryScreen(vm: NovaViewModel) {
+fun DiaryScreen(vm: NovaViewModel, onOpenCapsules: () -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
     var mood by rememberSaveable { mutableStateOf("") }
     var toDelete by remember { mutableStateOf<DiaryEntry?>(null) }
@@ -106,6 +106,34 @@ fun DiaryScreen(vm: NovaViewModel) {
                     "Lo que haces y lo que piensas. NOVA lo guarda en tu memoria para conocerte mejor.",
                     color = Nova.Muted, fontSize = 14.sp, lineHeight = 19.sp
                 )
+                Spacer(Modifier.size(12.dp))
+                // Acceso a las cápsulas del tiempo
+                val readyCount = vm.readyCapsules()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Nova.Surface)
+                        .border(1.dp, if (readyCount > 0) Nova.Purple else Nova.Stroke, RoundedCornerShape(16.dp))
+                        .clickable(onClick = onOpenCapsules)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("⏳", fontSize = 22.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Cápsulas del tiempo", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            when {
+                                readyCount > 0 -> "Tienes $readyCount lista${if (readyCount == 1) "" else "s"} para abrir"
+                                vm.capsules.isEmpty() -> "Escribe un mensaje a tu yo del futuro"
+                                else -> "${vm.capsules.count { !it.opened }} sellada${if (vm.capsules.count { !it.opened } == 1) "" else "s"}"
+                            },
+                            color = if (readyCount > 0) Nova.Violet else Nova.Muted, fontSize = 13.sp
+                        )
+                    }
+                    Text("›", color = Nova.Muted, fontSize = 24.sp)
+                }
             }
         }
 

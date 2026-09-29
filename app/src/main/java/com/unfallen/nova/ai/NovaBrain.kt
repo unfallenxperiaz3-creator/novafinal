@@ -187,6 +187,51 @@ Responde ÚNICAMENTE con JSON válido, sin texto extra, con este formato:
         parseMemoryUpdate(parseText(raw))
     }
 
+    // ------------------------------------------------------------------ CÁPSULAS
+
+    /** Lo que NOVA le dice a la persona al abrir una cápsula del tiempo. */
+    suspend fun capsuleNote(
+        apiKey: String,
+        model: String,
+        userName: String,
+        capsuleText: String,
+        writtenAt: Long,
+        profile: Profile,
+        memories: List<Memory>,
+        diary: List<DiaryEntry>
+    ): String? = withContext(Dispatchers.IO) {
+        val fmt = SimpleDateFormat("d 'de' MMMM 'de' yyyy", es)
+        val since = memories.filter { it.createdAt >= writtenAt }
+            .joinToString("\n") { "- ${it.category}: ${it.text}" }.ifBlank { "(pocos datos nuevos desde entonces)" }
+        val instructions = """
+Eres NOVA, la compañera extraterrestre de ${userName.ifBlank { "esta persona" }}. Hoy (${fmt.format(Date())}) abre una cápsula del tiempo que se escribió a sí mismo el ${fmt.format(Date(writtenAt))}.
+Escríbele un mensaje breve (80-150 palabras), cálido y honesto, en español de España, tuteando, sin listas ni emojis:
+- Comenta qué ha cambiado en él/ella desde entonces y qué sigue igual, usando lo que sabes. No inventes nada.
+- Si en la cápsula se ponía metas o hacía preguntas a su yo futuro, haz referencia a ellas con tacto.
+- Termina con una pregunta que le invite a reflexionar.
+
+RETRATO ACTUAL:
+${profile.text.ifBlank { "(aún no hay)" }}
+
+LO QUE HAS APRENDIDO DE ÉL/ELLA DESDE QUE ESCRIBIÓ LA CÁPSULA:
+$since
+
+DIARIO RECIENTE:
+${diaryText(diary)}
+""".trim()
+        val body = JSONObject()
+            .put("model", model)
+            .put("instructions", instructions)
+            .put("input", "Mi cápsula del tiempo dice:\n\n$capsuleText")
+            .put("max_output_tokens", 1500)
+            .put("store", false)
+        try {
+            parseText(post(apiKey, body, allowReasoningFallback = true)).ifBlank { null }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     // ------------------------------------------------------------------ CONÓCEME
 
     /**

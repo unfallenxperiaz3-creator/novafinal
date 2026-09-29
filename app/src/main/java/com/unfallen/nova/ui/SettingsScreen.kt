@@ -302,8 +302,8 @@ private fun WipeSettings(vm: NovaViewModel) {
     if (current == null) {
         val options = listOf(
             NovaViewModel.WipeTarget.MEMORY to "Borrar memoria y retrato (${vm.memories.size} recuerdos)",
-            NovaViewModel.WipeTarget.DIARY to "Borrar diario (${vm.diary.size} entradas)",
-            NovaViewModel.WipeTarget.ALL to "Borrar todo (memoria, retrato y diario)"
+            NovaViewModel.WipeTarget.DIARY to "Borrar diario y cápsulas del tiempo",
+            NovaViewModel.WipeTarget.ALL to "Borrar todo (memoria, retrato, diario y cápsulas)"
         )
         options.forEach { (t, label) ->
             OutlinedButton(
@@ -316,8 +316,8 @@ private fun WipeSettings(vm: NovaViewModel) {
 
     val what = when (current) {
         NovaViewModel.WipeTarget.MEMORY -> "todos los recuerdos y tu retrato"
-        NovaViewModel.WipeTarget.DIARY -> "todas las entradas del diario"
-        NovaViewModel.WipeTarget.ALL -> "todos los recuerdos, tu retrato y el diario"
+        NovaViewModel.WipeTarget.DIARY -> "todas las entradas del diario y tus cápsulas del tiempo"
+        NovaViewModel.WipeTarget.ALL -> "todos los recuerdos, tu retrato, el diario y las cápsulas"
     }
     Text(
         "Se borrarán $what. No se puede deshacer. La conversación del chat no se toca.",

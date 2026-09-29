@@ -30,6 +30,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +50,8 @@ import com.unfallen.nova.ui.NovaTheme
 import com.unfallen.nova.ui.PinLockScreen
 import com.unfallen.nova.ui.SettingsScreen
 import com.unfallen.nova.ui.DiaryScreen
+import com.unfallen.nova.ui.CapsuleScreen
+import com.unfallen.nova.capsule.CapsuleScheduler
 import com.unfallen.nova.ui.KnowMeScreen
 
 enum class Tab(val label: String, val icon: ImageVector, val needsPin: Boolean = false) {
@@ -65,8 +68,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
         setContent {
             NovaTheme { NovaRoot(vm) }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** Al tocar la notificación de una cápsula: ir a Diario → Cápsulas (pidiendo PIN si toca). */
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null) return
+        if (intent.getBooleanExtra(CapsuleScheduler.EXTRA_OPEN_CAPSULES, false)) {
+            vm.showCapsules = true
+            vm.openCapsulesRequest = true
+            intent.removeExtra(CapsuleScheduler.EXTRA_OPEN_CAPSULES)
         }
     }
 
@@ -81,6 +100,12 @@ class MainActivity : ComponentActivity() {
 fun NovaRoot(vm: NovaViewModel) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(Tab.CHAT) }
+    LaunchedEffect(vm.openCapsulesRequest) {
+        if (vm.openCapsulesRequest) {
+            tab = Tab.DIARY
+            vm.openCapsulesRequest = false
+        }
+    }
 
     // Plan B: si el móvil no deja usar el reconocimiento "dentro" de la app, abrimos el de Google
     val systemVoice = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
@@ -125,6 +150,7 @@ fun NovaRoot(vm: NovaViewModel) {
                 NovaBottomBar(tab) { new ->
                     // Memoria y Diario comparten PIN: se vuelve a bloquear al salir de ambos
                     if (tab.needsPin && !new.needsPin) vm.lockMemory()
+                    if (new != Tab.DIARY) vm.showCapsules = false
                     tab = new
                 }
             }
@@ -135,8 +161,12 @@ fun NovaRoot(vm: NovaViewModel) {
                 Tab.CHAT -> ChatScreen(vm, onMic = onMic, onOpenSettings = { tab = Tab.SETTINGS })
                 Tab.MEMORY -> if (vm.memoryUnlocked) MemoryScreen(vm) else PinLockScreen(vm)
                 Tab.KNOWME -> KnowMeScreen(vm)
-                Tab.DIARY -> if (vm.memoryUnlocked) DiaryScreen(vm)
-                    else PinLockScreen(vm, lockedTitle = "Diario protegido", what = "tu diario")
+                Tab.DIARY -> if (vm.memoryUnlocked) {
+                    if (vm.showCapsules) CapsuleScreen(vm, onBack = { vm.showCapsules = false })
+                    else DiaryScreen(vm, onOpenCapsules = { vm.showCapsules = true })
+                } else {
+                    PinLockScreen(vm, lockedTitle = "Diario protegido", what = "tu diario")
+                }
                 Tab.SETTINGS -> SettingsScreen(vm)
             }
         }

@@ -178,6 +178,29 @@ class Storage(context: Context) {
         else prefs.edit().putString(key, JSONObject().put("q", q.text).put("c", q.category).toString()).apply()
     }
 
+    // ---------- Cápsulas del tiempo ----------
+    fun loadCapsules(): List<TimeCapsule> = readArray("capsules.json").mapObjects { o ->
+        TimeCapsule(
+            id = o.optString("id"),
+            createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+            openAt = o.optLong("openAt", 0L),
+            text = o.optString("text"),
+            opened = o.optBoolean("opened", false),
+            novaNote = o.optString("note")
+        )
+    }.filter { it.id.isNotBlank() && it.text.isNotBlank() }
+
+    fun saveCapsules(list: List<TimeCapsule>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(
+                JSONObject().put("id", it.id).put("createdAt", it.createdAt).put("openAt", it.openAt)
+                    .put("text", it.text).put("opened", it.opened).put("note", it.novaNote)
+            )
+        }
+        write("capsules.json", arr.toString())
+    }
+
     // ---------- Perfil ----------
     fun loadProfile(): Profile {
         val raw = read("profile.json") ?: return Profile()
