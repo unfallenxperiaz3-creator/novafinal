@@ -14,6 +14,7 @@ import com.unfallen.nova.data.ChatMessage
 import com.unfallen.nova.data.DiaryEntry
 import com.unfallen.nova.data.QaEntry
 import com.unfallen.nova.data.TimeCapsule
+import com.unfallen.nova.data.Dream
 import com.unfallen.nova.capsule.CapsuleScheduler
 import com.unfallen.nova.data.Question
 import com.unfallen.nova.ai.QuestionBank
@@ -49,6 +50,14 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
     var profile by mutableStateOf(Profile())
         private set
     var diary by mutableStateOf(listOf<DiaryEntry>())
+        private set
+
+    // Sueños
+    var dreams by mutableStateOf(listOf<Dream>())
+        private set
+    var showDreams by mutableStateOf(false)
+    /** Ids de sueños que NOVA está interpretando ahora mismo. */
+    var interpreting by mutableStateOf(setOf<String>())
         private set
 
     // Cápsulas del tiempo
@@ -162,8 +171,10 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
             val q = storage.loadQa()
             val sk = storage.loadSkipped()
             val caps = storage.loadCapsules()
+            val dr = storage.loadDreams()
             launch(Dispatchers.Main) {
                 capsules = caps
+                dreams = dr
                 qa = q.map { it.copy(answer = "") } // por si quedara alguna respuesta antigua
                 skipped = sk
                 currentQuestion = storage.loadQuestion("qa_current")
@@ -316,6 +327,50 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
                 isLearning = false
             }
         }
+    }
+
+    // ============================================================ SUEÑOS
+
+    fun addDream(text: String, feeling: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        val d = Dream(text = t, feeling = feeling)
+        dreams = dreams + d
+        persistDreams()
+        interpretDream(d.id)
+    }
+
+    fun interpretDream(id: String) {
+        val d = dreams.firstOrNull { it.id == id } ?: return
+        if (id in interpreting) return
+        if (apiKey.isBlank()) {
+            updateDream(id) { it.copy(failed = true) }
+            return
+        }
+        interpreting = interpreting + id
+        updateDream(id) { it.copy(failed = false) }
+        viewModelScope.launch {
+            val previous = dreams.filter { it.id != id }.sortedBy { it.time }.map { it.text }
+            val r = brain.interpretDream(apiKey, model, userName, d.text, d.feeling, previous)
+            interpreting = interpreting - id
+            if (r == null) updateDream(id) { it.copy(failed = true) }
+            else updateDream(id) { it.copy(interpretation = r.text, sources = r.sources, searched = r.searched, failed = false) }
+        }
+    }
+
+    fun deleteDream(id: String) {
+        dreams = dreams.filterNot { it.id == id }
+        persistDreams()
+    }
+
+    private fun updateDream(id: String, change: (Dream) -> Dream) {
+        dreams = dreams.map { if (it.id == id) change(it) else it }
+        persistDreams()
+    }
+
+    private fun persistDreams() {
+        val snap = dreams
+        diskScope.launch { storage.saveDreams(snap) }
     }
 
     // ============================================================ CÁPSULAS
@@ -648,6 +703,8 @@ class NovaViewModel(app: Application) : AndroidViewModel(app) {
             capsules.forEach { CapsuleScheduler.cancel(getApplication<Application>(), it.id) }
             capsules = emptyList()
             persistCapsules()
+            dreams = emptyList()
+            persistDreams()
         }
         return null
     }

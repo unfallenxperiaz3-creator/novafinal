@@ -51,6 +51,7 @@ import com.unfallen.nova.ui.PinLockScreen
 import com.unfallen.nova.ui.SettingsScreen
 import com.unfallen.nova.ui.DiaryScreen
 import com.unfallen.nova.ui.CapsuleScreen
+import com.unfallen.nova.ui.DreamScreen
 import com.unfallen.nova.capsule.CapsuleScheduler
 import com.unfallen.nova.ui.KnowMeScreen
 
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         if (intent.getBooleanExtra(CapsuleScheduler.EXTRA_OPEN_CAPSULES, false)) {
+            vm.showDreams = false
             vm.showCapsules = true
             vm.openCapsulesRequest = true
             intent.removeExtra(CapsuleScheduler.EXTRA_OPEN_CAPSULES)
@@ -150,7 +152,10 @@ fun NovaRoot(vm: NovaViewModel) {
                 NovaBottomBar(tab) { new ->
                     // Memoria y Diario comparten PIN: se vuelve a bloquear al salir de ambos
                     if (tab.needsPin && !new.needsPin) vm.lockMemory()
-                    if (new != Tab.DIARY) vm.showCapsules = false
+                    if (new != Tab.DIARY) {
+                        vm.showCapsules = false
+                        vm.showDreams = false
+                    }
                     tab = new
                 }
             }
@@ -162,8 +167,15 @@ fun NovaRoot(vm: NovaViewModel) {
                 Tab.MEMORY -> if (vm.memoryUnlocked) MemoryScreen(vm) else PinLockScreen(vm)
                 Tab.KNOWME -> KnowMeScreen(vm)
                 Tab.DIARY -> if (vm.memoryUnlocked) {
-                    if (vm.showCapsules) CapsuleScreen(vm, onBack = { vm.showCapsules = false })
-                    else DiaryScreen(vm, onOpenCapsules = { vm.showCapsules = true })
+                    when {
+                        vm.showCapsules -> CapsuleScreen(vm, onBack = { vm.showCapsules = false })
+                        vm.showDreams -> DreamScreen(vm, onBack = { vm.showDreams = false })
+                        else -> DiaryScreen(
+                            vm,
+                            onOpenCapsules = { vm.showCapsules = true },
+                            onOpenDreams = { vm.showDreams = true }
+                        )
+                    }
                 } else {
                     PinLockScreen(vm, lockedTitle = "Diario protegido", what = "tu diario")
                 }

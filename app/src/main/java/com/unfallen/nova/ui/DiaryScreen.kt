@@ -80,7 +80,7 @@ private fun dayTitle(t: Long): String {
 
 /** Diario: formulario del día + entradas anteriores. Cada entrada se envía a la memoria de NOVA. */
 @Composable
-fun DiaryScreen(vm: NovaViewModel, onOpenCapsules: () -> Unit) {
+fun DiaryScreen(vm: NovaViewModel, onOpenCapsules: () -> Unit, onOpenDreams: () -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
     var mood by rememberSaveable { mutableStateOf("") }
     var toDelete by remember { mutableStateOf<DiaryEntry?>(null) }
@@ -130,6 +130,30 @@ fun DiaryScreen(vm: NovaViewModel, onOpenCapsules: () -> Unit) {
                                 else -> "${vm.capsules.count { !it.opened }} sellada${if (vm.capsules.count { !it.opened } == 1) "" else "s"}"
                             },
                             color = if (readyCount > 0) Nova.Violet else Nova.Muted, fontSize = 13.sp
+                        )
+                    }
+                    Text("›", color = Nova.Muted, fontSize = 24.sp)
+                }
+                Spacer(Modifier.size(8.dp))
+                // Acceso al diario de sueños
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Nova.Surface)
+                        .border(1.dp, Nova.Stroke, RoundedCornerShape(16.dp))
+                        .clickable(onClick = onOpenDreams)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🌙", fontSize = 22.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Diario de sueños", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (vm.dreams.isEmpty()) "Apunta lo que sueñas y NOVA te lo interpreta"
+                            else "${vm.dreams.size} sueño${if (vm.dreams.size == 1) "" else "s"} apuntado${if (vm.dreams.size == 1) "" else "s"}",
+                            color = Nova.Muted, fontSize = 13.sp
                         )
                     }
                     Text("›", color = Nova.Muted, fontSize = 24.sp)

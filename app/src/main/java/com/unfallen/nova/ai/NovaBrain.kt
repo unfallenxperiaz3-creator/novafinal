@@ -3,6 +3,7 @@ package com.unfallen.nova.ai
 import com.unfallen.nova.data.Categories
 import com.unfallen.nova.data.ChatMessage
 import com.unfallen.nova.data.DiaryEntry
+import com.unfallen.nova.data.Source
 import com.unfallen.nova.data.Memory
 import com.unfallen.nova.data.Profile
 import com.unfallen.nova.data.QaEntry
@@ -21,6 +22,9 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class NovaException(message: String) : Exception(message)
+
+/** Interpretación de un sueño. */
+data class DreamReading(val text: String, val sources: List<Source>, val searched: Boolean)
 
 /** Resultado del análisis de memoria tras cada conversación. */
 data class MemoryUpdate(
@@ -185,6 +189,94 @@ Responde ÚNICAMENTE con JSON válido, sin texto extra, con este formato:
             return@withContext null
         }
         parseMemoryUpdate(parseText(raw))
+    }
+
+    // ------------------------------------------------------------------ SUEÑOS
+
+    /**
+     * Interpreta un sueño buscando en internet qué se suele decir de esos símbolos
+     * (herramienta web_search de OpenAI). Si el modelo no admite la búsqueda, lo interpreta sin ella.
+     */
+    suspend fun interpretDream(
+        apiKey: String,
+        model: String,
+        userName: String,
+        dream: String,
+        feeling: String,
+        previousDreams: List<String>
+    ): DreamReading? = withContext(Dispatchers.IO) {
+        val prev = previousDreams.takeLast(10).joinToString("\n") { "- ${it.take(200)}" }.ifBlank { "(ninguno)" }
+        val instructions = """
+Eres NOVA, la compañera extraterrestre de ${userName.ifBlank { "esta persona" }}. Te cuenta un sueño que acaba de tener.
+1. BUSCA EN INTERNET qué se suele decir sobre los símbolos o situaciones principales de este sueño (webs de interpretación de sueños y, si hay, psicología del sueño).
+2. Explícaselo en español de España, tuteando, cálido y claro, en 120-220 palabras:
+   - Primero, qué suele significar según lo que se dice en internet (menciona los 2-4 símbolos clave).
+   - Luego, una lectura más psicológica: qué emoción o preocupación podría reflejar.
+   - Si se parece a sueños anteriores suyos, menciónalo.
+   - Termina con una pregunta corta para que reflexione.
+3. Deja claro, en una frase breve, que son interpretaciones populares y no ciencia.
+No uses listas largas ni títulos con #. Sensación al despertar: ${feeling.ifBlank { "no la ha indicado" }}.
+
+SUEÑOS ANTERIORES SUYOS:
+$prev
+""".trim()
+        val base = JSONObject()
+            .put("model", model)
+            .put("instructions", instructions)
+            .put("input", "Esta noche he soñado esto:\n\n$dream")
+            .put("max_output_tokens", 3000)
+            .put("store", false)
+
+        var searched = true
+        val raw = try {
+            val withSearch = JSONObject(base.toString())
+                .put("tools", JSONArray().put(JSONObject().put("type", "web_search")))
+                .put("reasoning", JSONObject().put("effort", "low"))
+            execute(apiKey, withSearch)
+        } catch (e: HttpError) {
+            if (e.code != 400) return@withContext null
+            // El modelo no admite búsqueda web: interpretación sin internet
+            searched = false
+            try {
+                post(apiKey, base, allowReasoningFallback = true)
+            } catch (e2: Exception) {
+                return@withContext null
+            }
+        } catch (e: Exception) {
+            return@withContext null
+        }
+
+        val text = parseText(raw)
+            .replace(Regex("\\s*\\(\\[[^\\]]+\\]\\([^)]+\\)\\)"), "")   // quita citas en línea ([web](url))
+            .replace(Regex("\\[([^\\]]+)\\]\\((https?://[^)]+)\\)"), "$1")
+            .trim()
+        if (text.isBlank()) return@withContext null
+        DreamReading(text, parseSources(raw), searched)
+    }
+
+    /** Fuentes que citó la búsqueda web (anotaciones url_citation). */
+    private fun parseSources(raw: String): List<Source> {
+        val out = LinkedHashMap<String, Source>()
+        try {
+            val output = JSONObject(raw).optJSONArray("output") ?: return emptyList()
+            for (i in 0 until output.length()) {
+                val content = output.optJSONObject(i)?.optJSONArray("content") ?: continue
+                for (j in 0 until content.length()) {
+                    val ann = content.optJSONObject(j)?.optJSONArray("annotations") ?: continue
+                    for (k in 0 until ann.length()) {
+                        val a = ann.optJSONObject(k) ?: continue
+                        if (a.optString("type") != "url_citation") continue
+                        val url = a.optString("url")
+                        if (url.startsWith("http") && url !in out) {
+                            val title = a.optString("title").ifBlank { android.net.Uri.parse(url).host ?: url }
+                            out[url] = Source(title, url)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return out.values.take(6)
     }
 
     // ------------------------------------------------------------------ CÁPSULAS

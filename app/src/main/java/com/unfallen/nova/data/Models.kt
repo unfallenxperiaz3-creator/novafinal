@@ -50,6 +50,24 @@ data class TimeCapsule(
     fun isReady(now: Long = System.currentTimeMillis()) = now >= openAt
 }
 
+/** Un sueño apuntado al despertar, con la interpretación de NOVA. */
+data class Dream(
+    val id: String = UUID.randomUUID().toString().take(8),
+    val time: Long = System.currentTimeMillis(),
+    val feeling: String = "",
+    val text: String,
+    val interpretation: String = "",
+    val sources: List<Source> = emptyList(),
+    val searched: Boolean = false,     // true si NOVA buscó en internet
+    val failed: Boolean = false
+)
+
+data class Source(val title: String, val url: String)
+
+object DreamFeelings {
+    val all = listOf("😊 Agradable", "🤔 Raro", "😨 Pesadilla", "🔁 Se repite", "😢 Triste")
+}
+
 object Moods {
     val all = listOf("😄 Genial", "🙂 Bien", "😐 Normal", "😔 Bajo", "😣 Mal")
 }

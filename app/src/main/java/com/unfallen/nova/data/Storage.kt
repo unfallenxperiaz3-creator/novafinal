@@ -201,6 +201,36 @@ class Storage(context: Context) {
         write("capsules.json", arr.toString())
     }
 
+    // ---------- Sueños ----------
+    fun loadDreams(): List<Dream> = readArray("dreams.json").mapObjects { o ->
+        val src = o.optJSONArray("sources")
+        Dream(
+            id = o.optString("id"),
+            time = o.optLong("time", System.currentTimeMillis()),
+            feeling = o.optString("feeling"),
+            text = o.optString("text"),
+            interpretation = o.optString("interp"),
+            sources = if (src == null) emptyList() else (0 until src.length()).mapNotNull { i ->
+                src.optJSONObject(i)?.let { Source(it.optString("title"), it.optString("url")) }
+            },
+            searched = o.optBoolean("searched", false),
+            failed = o.optBoolean("failed", false)
+        )
+    }.filter { it.id.isNotBlank() && it.text.isNotBlank() }
+
+    fun saveDreams(list: List<Dream>) {
+        val arr = JSONArray()
+        list.forEach { d ->
+            val src = JSONArray()
+            d.sources.forEach { src.put(JSONObject().put("title", it.title).put("url", it.url)) }
+            arr.put(
+                JSONObject().put("id", d.id).put("time", d.time).put("feeling", d.feeling).put("text", d.text)
+                    .put("interp", d.interpretation).put("sources", src).put("searched", d.searched).put("failed", d.failed)
+            )
+        }
+        write("dreams.json", arr.toString())
+    }
+
     // ---------- Perfil ----------
     fun loadProfile(): Profile {
         val raw = read("profile.json") ?: return Profile()
