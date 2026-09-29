@@ -120,7 +120,7 @@ fun AlienAvatar(
             painter = painterResource(R.drawable.nova_avatar),
             contentDescription = "NOVA",
             contentScale = ContentScale.Crop,
-            alignment = BiasAlignment(0.04f, -0.3f),
+            alignment = BiasAlignment(0f, -0.25f), // centra los ojos del alien
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
